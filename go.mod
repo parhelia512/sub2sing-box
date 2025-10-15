@@ -1,4 +1,4 @@
-module github.com/nitezs/sub2sing-box
+module github.com/bestnite/sub2sing-box
 
 go 1.25
 
