@@ -12,4 +12,5 @@ type ConvertRequest struct {
 	SortType      string            `form:"sort-type" json:"sort-type"`
 	Output        string            `json:"output"`
 	GroupRules    string            `form:"group-rules" json:"group-rules"`
+	UserAgent     string            `form:"user-agent" json:"user-agent"`
 }

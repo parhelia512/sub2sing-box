@@ -57,6 +57,7 @@ func Convert(c *gin.Context) {
 		data.SortKey,
 		data.SortType,
 		groupRules,
+		data.UserAgent,
 	)
 	if err != nil {
 		c.JSON(400, gin.H{

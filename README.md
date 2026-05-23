@@ -20,7 +20,8 @@
   "group-type": "selector",
   "sort": "name",
   "sort-type": "asc",
-  "output": "./config.json"
+  "output": "./config.json",
+  "user-agent": "自定义 User-Agent"
 }
 ```
 

@@ -25,6 +25,7 @@ var (
 	sortType      string
 	config        string
 	groupRules    string
+	userAgent     string
 )
 
 func init() {
@@ -40,6 +41,7 @@ func init() {
 	convertCmd.Flags().StringVarP(&sortType, "sort-type", "T", "", "sort type, asc or desc")
 	convertCmd.Flags().StringVarP(&config, "config", "c", "", "configuration file path")
 	convertCmd.Flags().StringVarP(&groupRules, "group-rules", "R", "", "group rules")
+	convertCmd.Flags().StringVarP(&userAgent, "user-agent", "u", "", "custom User-Agent for fetching subscriptions and remote templates")
 	RootCmd.AddCommand(convertCmd)
 }
 
@@ -71,6 +73,7 @@ func convertRun(cmd *cobra.Command, args []string) {
 		sortKey,
 		sortType,
 		groupRulesMap,
+		userAgent,
 	)
 	if err != nil {
 		fmt.Println("Conversion error:", err)
@@ -151,5 +154,8 @@ func mergeConfig(cfg model.ConvertRequest) {
 	}
 	if output == "" {
 		output = cfg.Output
+	}
+	if userAgent == "" {
+		userAgent = cfg.UserAgent
 	}
 }

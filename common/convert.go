@@ -36,6 +36,7 @@ func Convert(
 	sortKey string,
 	sortType string,
 	groupRules map[string][]string,
+	userAgent string,
 ) (string, error) {
 	result := ""
 	var err error
@@ -44,7 +45,7 @@ func Convert(
 		groupType = C.TypeSelector
 	}
 
-	outbounds, err := ConvertSubscriptionsToSProxy(subscriptions)
+	outbounds, err := ConvertSubscriptionsToSProxy(subscriptions, userAgent)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +105,7 @@ func Convert(
 		outbounds = AddCountryGroup(outbounds, groupType, sortKey, sortType, groupRules)
 	}
 	if templatePath != "" {
-		templateData, err := ReadTemplate(templatePath)
+		templateData, err := ReadTemplate(templatePath, userAgent)
 		if err != nil {
 			return "", err
 		}
@@ -226,12 +227,12 @@ func AddCountryGroup(proxies []model.Outbound, groupType string, sortKey string,
 	return append(proxies, groups...)
 }
 
-func ReadTemplate(template string) (string, error) {
+func ReadTemplate(template string, userAgent string) (string, error) {
 	var data string
 	var err error
 	isNetworkFile, _ := regexp.MatchString(`^https?://`, template)
 	if isNetworkFile {
-		data, err = util.Fetch(template, 3)
+		data, err = util.Fetch(template, 3, userAgent)
 		if err != nil {
 			return "", err
 		}
@@ -320,10 +321,10 @@ func ConvertCProxyToSProxy(proxy string) (model.Outbound, error) {
 	return model.Outbound{}, errors.New("unknown proxy format")
 }
 
-func ConvertSubscriptionsToSProxy(urls []string) ([]model.Outbound, error) {
+func ConvertSubscriptionsToSProxy(urls []string, userAgent string) ([]model.Outbound, error) {
 	proxyList := make([]model.Outbound, 0)
 	for _, url := range urls {
-		data, err := util.Fetch(url, 3)
+		data, err := util.Fetch(url, 3, userAgent)
 		if err != nil {
 			return nil, err
 		}
