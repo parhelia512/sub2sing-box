@@ -34,10 +34,6 @@
         "outbound": "default"
       },
       {
-        "rule_set": "geosite-bahamut",
-        "outbound": "台湾(TW)"
-      },
-      {
         "process_path_regex": [
           "^.+/steam/compatibilitytools.d/.+",
           "^.+/steamapps/common/.*"
@@ -59,6 +55,7 @@
     "auto_detect_interface": true,
     "default_domain_resolver": {
       "server": "local"
-    }
+    },
+    "default_http_client": "rule-set-dl"
   }
 }

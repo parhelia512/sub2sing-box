@@ -12,8 +12,7 @@
         "tag": "local",
         "type": "h3",
         "server": "223.5.5.5",
-        "path": "/dns-query",
-        "detour": "direct"
+        "path": "/dns-query"
       }
     ],
     "rules": [
@@ -35,6 +34,10 @@
         "server": "local"
       },
       {
+        "action": "evaluate",
+        "server": "local"
+      },
+      {
         "type": "logical",
         "mode": "and",
         "rules": [
@@ -43,6 +46,7 @@
             "invert": true
           },
           {
+            "match_response": true,
             "rule_set": "geoip-cn"
           }
         ],
