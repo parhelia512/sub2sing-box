@@ -29,6 +29,25 @@ func (o *Options) UnmarshalJSONContext(ctx context.Context, content []byte) erro
 	return nil
 }
 
+// _OptionsExtra 只用于序列化时把下面三个字段合并回 option.Options 生成的对象里。
+type _OptionsExtra struct {
+	Endpoints []Endpoint `json:"endpoints,omitempty"`
+	Inbounds  []Inbound  `json:"inbounds,omitempty"`
+	Outbounds []Outbound `json:"outbounds,omitempty"`
+}
+
+// MarshalJSONContext 必须显式实现：sing-box 1.14 起 option.Options 提供了值接收者的
+// MarshalJSONContext，它会被提升到本类型上，序列化时只输出 option.Options 自身的字段，
+// 导致这里附加的 endpoints/inbounds/outbounds 被整体丢弃（转换结果里生成的节点全部消失）。
+// 这里先序列化 option.Options，再把三个字段合并进去覆盖同名键。
+func (o Options) MarshalJSONContext(ctx context.Context) ([]byte, error) {
+	return badjson.MarshallObjectsContext(ctx, o.Options, _OptionsExtra{
+		Endpoints: o.Endpoints,
+		Inbounds:  o.Inbounds,
+		Outbounds: o.Outbounds,
+	})
+}
+
 type LogOptions struct {
 	Disabled     bool   `json:"disabled,omitempty"`
 	Level        string `json:"level,omitempty"`

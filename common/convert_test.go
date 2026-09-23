@@ -140,3 +140,50 @@ func TestMergeTemplatePreservesOtherSections(t *testing.T) {
 		}
 	}
 }
+
+// 生成的节点与地区分组必须出现在结果里。
+// sing-box 1.14 起 option.Options 提供了值接收者的 MarshalJSONContext，它会被提升到
+// model.Options 上，序列化时只输出 option.Options 自身的字段，把本类型附加的
+// endpoints/inbounds/outbounds 整体丢掉——模板里的策略组照旧、check 也能过，
+// 但订阅节点和地区分组全部消失。
+func TestMergeTemplateKeepsGeneratedOutbounds(t *testing.T) {
+	template := writeTemplate(t, `{
+  "outbounds": [
+    { "type": "selector", "tag": "节点选择", "outbounds": ["<all-country-tags>", "手动切换", "direct"] },
+    { "type": "selector", "tag": "手动切换", "outbounds": ["<all-proxy-tags>"] },
+    { "type": "direct", "tag": "direct" }
+  ],
+  "route": { "final": "节点选择" }
+}`)
+
+	result := convertWithTemplate(t, template)
+
+	var parsed struct {
+		Outbounds []struct {
+			Type  string   `json:"type"`
+			Tag   string   `json:"tag"`
+			Items []string `json:"outbounds"`
+		} `json:"outbounds"`
+	}
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	tags := make(map[string]bool, len(parsed.Outbounds))
+	for _, outbound := range parsed.Outbounds {
+		tags[outbound.Tag] = true
+	}
+	if !tags["US 01"] {
+		t.Errorf("generated proxy outbound dropped: %s", result)
+	}
+	if !tags["美国(US)"] {
+		t.Errorf("generated country group dropped: %s", result)
+	}
+	for _, outbound := range parsed.Outbounds {
+		if outbound.Tag != "手动切换" {
+			continue
+		}
+		if len(outbound.Items) != 1 || outbound.Items[0] != "US 01" {
+			t.Errorf("proxy placeholder not expanded: %v", outbound.Items)
+		}
+	}
+}
