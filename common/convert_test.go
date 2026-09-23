@@ -19,9 +19,24 @@ func writeTemplate(t *testing.T, content string) string {
 
 func convertWithTemplate(t *testing.T, template string) string {
 	t.Helper()
+	return convertLinkWithTemplate(t, "trojan://pass@1.2.3.4:443#US 01", template)
+}
+
+func convertLinkWithTemplate(t *testing.T, link string, template string) string {
+	t.Helper()
+	return convertLinksWithTemplate(t, []string{link}, template)
+}
+
+func convertLinks(t *testing.T, links []string) string {
+	t.Helper()
+	return convertLinksWithTemplate(t, links, "")
+}
+
+func convertLinksWithTemplate(t *testing.T, links []string, template string) string {
+	t.Helper()
 	result, err := Convert(
 		nil,
-		[]string{"trojan://pass@1.2.3.4:443#US 01"},
+		links,
 		template,
 		"",
 		nil,
@@ -36,6 +51,11 @@ func convertWithTemplate(t *testing.T, template string) string {
 		t.Fatal(err)
 	}
 	return result
+}
+
+func convertLink(t *testing.T, link string) string {
+	t.Helper()
+	return convertLinkWithTemplate(t, link, "")
 }
 
 // 模板里的 dns server 字段必须原样保留：sing-box 的 option.DNSServerOptions
@@ -186,4 +206,89 @@ func TestMergeTemplateKeepsGeneratedOutbounds(t *testing.T) {
 			t.Errorf("proxy placeholder not expanded: %v", outbound.Items)
 		}
 	}
+}
+
+// type=ws 的 trojan 链接不能生成带 network 字段的出站：链接里的 type 是传输类型，
+// 写进 network 会让内核拒绝整个出站（outbounds[n].network: unknown network: ws）。
+func TestConvertTrojanWebsocketTransport(t *testing.T) {
+	result := convertLink(t, "trojan://pass@1.2.3.4:443?sni=a.example.com&type=ws&path=%2Fws#JP 01")
+
+	if strings.Contains(result, `"network"`) {
+		t.Errorf("transport type leaked into network field: %s", result)
+	}
+	if !strings.Contains(result, `"type":"ws"`) {
+		t.Errorf("ws transport missing: %s", result)
+	}
+}
+
+// sing-box 1.6.0 起没有 shadowsocksr 出站，ssr:// 必须给出明确原因。
+func TestConvertUnsupportedProxyError(t *testing.T) {
+	_, err := Convert(
+		nil,
+		[]string{"ssr://MS4yLjMuMTQ6ODM4OTphdXRoX2FlczEyOF9tZDU6cHdk"},
+		"",
+		"",
+		nil,
+		false,
+		"selector",
+		"tag",
+		"asc",
+		nil,
+		"",
+	)
+	if err == nil {
+		t.Fatal("expected an error for ssr:// link")
+	}
+	if !strings.Contains(err.Error(), "shadowsocksr") {
+		t.Errorf("error should explain the real reason, got: %v", err)
+	}
+}
+
+// 去重键必须包含出站的完整配置：不同服务器但同名的节点不能当成重复节点丢掉。
+func TestConvertKeepsDistinctProxiesWithSameTag(t *testing.T) {
+	result := convertLinks(t, []string{
+		"trojan://passA@1.2.3.4:443?sni=a.example.com#US 01",
+		"trojan://passB@5.6.7.8:443?sni=b.example.com#US 01",
+	})
+
+	servers := make(map[string]bool)
+	for _, outbound := range parseOutbounds(t, result) {
+		if outbound["type"] == "trojan" {
+			servers[outbound["server"].(string)] = true
+		}
+	}
+	if len(servers) != 2 {
+		t.Fatalf("expected both nodes to survive, got %v", servers)
+	}
+}
+
+// 重复 tag 必须改名，否则生成的配置会被内核拒绝：
+// decode config: duplicate outbound/endpoint tag: US 01
+func TestConvertRenamesDuplicateTags(t *testing.T) {
+	result := convertLinks(t, []string{
+		"trojan://pass@1.2.3.4:443?sni=a.example.com#US 01",
+		"vless://11111111-2222-3333-4444-555555555555@5.6.7.8:443?encryption=none&security=tls&sni=b.example.com#US 01",
+	})
+
+	tags := make(map[string]int)
+	for _, outbound := range parseOutbounds(t, result) {
+		tags[outbound["tag"].(string)]++
+	}
+	if len(tags) != 2 {
+		t.Fatalf("expected both nodes to survive, got %v", tags)
+	}
+	for tag, count := range tags {
+		if count > 1 {
+			t.Errorf("duplicate tag %q", tag)
+		}
+	}
+}
+
+func parseOutbounds(t *testing.T, result string) []map[string]any {
+	t.Helper()
+	var outbounds []map[string]any
+	if err := json.Unmarshal([]byte(result), &outbounds); err != nil {
+		t.Fatalf("invalid output %q: %v", result, err)
+	}
+	return outbounds
 }

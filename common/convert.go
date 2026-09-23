@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +23,14 @@ import (
 )
 
 var globalCtx = box.Context(context.Background(), include.InboundRegistry(), include.OutboundRegistry(), include.EndpointRegistry(), include.DNSTransportRegistry(), include.ServiceRegistry(), include.CertificateProviderRegistry())
+
+// marshalOutbound 用 sing 的 context 编码器序列化出站。
+// 必须传指针：model.Outbound 的 MarshalJSON 定义在指针接收者上，
+// 序列化值副本会退化成结构体编码、丢掉 json:"-" 的 Options，
+// 结果只剩 type+tag —— 输出里没有服务器信息，去重时还会把不同服务器但同名的节点当成重复节点。
+func marshalOutbound(outbound *model.Outbound) ([]byte, error) {
+	return J.MarshalContext(globalCtx, outbound)
+}
 
 func Convert(
 	subscriptions []string,
@@ -73,32 +80,39 @@ func Convert(
 
 	set := make(map[string]bool)
 	deduplicatedOutbounds := make([]model.Outbound, 0)
-	for _, p := range outbounds {
-		jsonBytes, err := json.Marshal(p)
+	for i := range outbounds {
+		// 去重键必须包含出站的完整配置，不能只剩 type+tag：
+		// 否则不同服务器但同名的两个节点会被当成重复节点丢掉。
+		jsonBytes, err := marshalOutbound(&outbounds[i])
 		if err != nil {
 			return "", err
 		}
 		if _, exists := set[string(jsonBytes)]; !exists {
 			set[string(jsonBytes)] = true
-			deduplicatedOutbounds = append(deduplicatedOutbounds, p)
+			deduplicatedOutbounds = append(deduplicatedOutbounds, outbounds[i])
 		}
 	}
 	outbounds = deduplicatedOutbounds
 
 	tagSet := make(map[string]bool)
-	for i, p := range outbounds {
-		if _, exists := tagSet[p.Tag]; exists {
+	for i := range outbounds {
+		tag := outbounds[i].Tag
+		if _, exists := tagSet[tag]; exists {
 			count := 1
 			for {
-				newTag := fmt.Sprintf("%s %d", p.Tag, count)
+				newTag := fmt.Sprintf("%s %d", tag, count)
 				if _, exists := tagSet[newTag]; !exists {
 					outbounds[i].Tag = newTag
+					tag = newTag
 					break
 				} else {
 					count++
 				}
 			}
 		}
+		// 必须登记已用过的 tag，否则重复 tag 永远检测不到，
+		// 生成的配置会被内核拒绝：duplicate outbound/endpoint tag: US 01
+		tagSet[tag] = true
 	}
 
 	if enableGroup {
@@ -137,18 +151,15 @@ func Convert(
 			return "", err
 		}
 	} else {
-		outboundJsons := make([]string, 0)
-		for _, p := range outbounds {
-			b, err := json.Marshal(p)
+		outboundJsons := make([]string, 0, len(outbounds))
+		for i := range outbounds {
+			b, err := marshalOutbound(&outbounds[i])
 			if err != nil {
 				return "", err
 			}
 			outboundJsons = append(outboundJsons, string(b))
 		}
 		result = fmt.Sprintf("[%s]", strings.Join(outboundJsons, ","))
-		if err != nil {
-			return "", err
-		}
 	}
 
 	return string(result), nil
@@ -324,11 +335,19 @@ func ConvertCProxyToSProxy(proxy string) (model.Outbound, error) {
 			return proxy, nil
 		}
 	}
+	if reason, unsupported := parser.UnsupportedReason(proxy); unsupported {
+		return model.Outbound{}, &parser.ParseError{
+			Type:    parser.ErrUnsupportedProxy,
+			Message: reason,
+			Raw:     proxy,
+		}
+	}
 	return model.Outbound{}, errors.New("unknown proxy format")
 }
 
 func ConvertSubscriptionsToSProxy(urls []string, userAgent string) ([]model.Outbound, error) {
 	proxyList := make([]model.Outbound, 0)
+	unsupportedLinks := make(map[string]int)
 	for _, url := range urls {
 		data, err := util.Fetch(url, 3, userAgent)
 		if err != nil {
@@ -343,16 +362,34 @@ func ConvertSubscriptionsToSProxy(urls []string, userAgent string) ([]model.Outb
 		}
 		proxies := strings.Split(proxy, "\n")
 		for _, p := range proxies {
+			matched := false
 			for prefix, parseFunc := range parser.ParserMap {
 				if strings.HasPrefix(p, prefix) {
+					matched = true
 					proxy, err := parseFunc(p)
 					if err != nil {
 						return nil, err
 					}
 					proxyList = append(proxyList, proxy)
+					break
+				}
+			}
+			if !matched {
+				if reason, unsupported := parser.UnsupportedReason(p); unsupported {
+					unsupportedLinks[reason]++
 				}
 			}
 		}
+	}
+	// sing-box 没有对应出站的链接（如 shadowsocksr）不能静默丢掉，
+	// 但也不该让整份订阅转换失败：只跳过，并把原因写到 stderr。
+	reasons := make([]string, 0, len(unsupportedLinks))
+	for reason := range unsupportedLinks {
+		reasons = append(reasons, reason)
+	}
+	sort.Strings(reasons)
+	for _, reason := range reasons {
+		fmt.Fprintf(os.Stderr, "skipped %d unsupported proxy link(s): %s\n", unsupportedLinks[reason], reason)
 	}
 	return proxyList, nil
 }
