@@ -15,4 +15,10 @@ var ParserMap map[string]func(string) (model.Outbound, error) = map[string]func(
 	constant.Hysteria2Prefix2:  ParseHysteria2,
 	constant.SocksPrefix:       ParseSocks,
 	constant.AnytlsPrefix:      ParseAnytls,
+	constant.TUICPrefix:        ParseTUIC,
+	constant.SSHPrefix:         ParseSSH,
+	constant.NaiveHTTPSPrefix:  ParseNaive,
+	constant.NaiveQUICPrefix:   ParseNaive,
+	constant.HTTPProxyPrefix:   ParseHTTP,
+	constant.HTTPSProxyPrefix:  ParseHTTP,
 }

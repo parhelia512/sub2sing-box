@@ -111,6 +111,43 @@ sub2sing-box convert -c ./sub2sing-box.json
 }
 ```
 
+## 支持的协议
+
+`-p/--proxy` 与订阅（`-s/--subscription`）里的分享链接支持以下协议：
+
+| 协议             | 链接格式                                                                            | 缺省端口 |
+| ---------------- | ----------------------------------------------------------------------------------- | -------- |
+| Shadowsocks      | `ss://`（SIP002 / SIP008）                                                          | 链接必填 |
+| VMess            | `vmess://`                                                                          | 链接必填 |
+| VLESS            | `vless://`                                                                          | 链接必填 |
+| Trojan           | `trojan://`                                                                         | 链接必填 |
+| Hysteria         | `hysteria://`                                                                       | 链接必填 |
+| Hysteria2        | `hysteria2://`、`hy2://`                                                            | 链接必填 |
+| TUIC             | `tuic://`                                                                           | 链接必填 |
+| AnyTLS           | `anytls://`                                                                         | 链接必填 |
+| SOCKS            | `socks://`、`socks5://`                                                             | 链接必填 |
+| SSH              | `ssh://user:password@host:port?private_key=...&host_key=...#标签`                    | 22       |
+| NaïveProxy       | `naive+https://`、`naive+quic://`（可选 `extra-headers`、`sni`）                     | 443      |
+| HTTP(S) 代理     | `proxy-http://`、`proxy-https://`（可选 `path`、`headers`、`sni`）                   | 80 / 443 |
+
+多个链接要写成重复的参数，不要用空格分隔（空格后面那些会被当成位置参数直接忽略）：
+
+```
+sub2sing-box convert -t sing-box-template.json -p "链接1" -p "链接2" -p "链接3" -o config.json
+```
+
+链接里如果含逗号（例如 ssh 的 `host_key_algorithms=ssh-ed25519,rsa-sha2-256`），这个逗号会被命令行框架当成参数分隔符拆开，此时请改用配置文件（`-c sub2sing-box.json`）里的 `proxy` 数组：
+
+```json
+{
+  "template": "sing-box-template.json",
+  "proxy": ["ssh://root:password@host:22?host_key_algorithms=ssh-ed25519,rsa-sha2-256#SSH"],
+  "output": "config.json"
+}
+```
+
+以下链接没有可用出站，转换时会明确说明原因：`ssr://`（sing-box 1.6.0 移除）、`wireguard://` / `wg://`（1.13.0 起改用 endpoint）、`juicity://`（内核无此出站）、`snell://`（无通用链接格式）。
+
 ## Docker 使用
 
 ```
