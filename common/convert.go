@@ -295,13 +295,19 @@ func MergeTemplate(outbounds []model.Outbound, template *model.Options, groupRul
 	}
 	template.Outbounds = append(template.Outbounds, outbounds...)
 
-	for i := range template.DNS.Rules {
-		if template.DNS.Rules[i].Type == "" {
-			template.DNS.Rules[i].Type = C.RuleTypeDefault
+	// option.DNSOptions.Servers 等字段的内容存放在 json:"-" 的 Options 字段里，
+	// 序列化依赖 MarshalJSONContext；用 encoding/json 直接 Marshal 会丢掉
+	// server/path 等除 type/tag 以外的全部字段，必须走带 context 的编码器。
+	// 另外模板可以没有 dns 段，这里要判空，否则 template.DNS.Rules 会 panic。
+	if template.DNS != nil {
+		for i := range template.DNS.Rules {
+			if template.DNS.Rules[i].Type == "" {
+				template.DNS.Rules[i].Type = C.RuleTypeDefault
+			}
 		}
 	}
 
-	data, err := json.Marshal(template)
+	data, err := J.MarshalContext(globalCtx, template)
 	if err != nil {
 		return "", err
 	}
