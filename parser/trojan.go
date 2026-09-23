@@ -62,6 +62,11 @@ func ParseTrojan(proxy string) (model.Outbound, error) {
 	query := link.Query()
 	network, security, alpnStr, sni, pbk, sid, fp, path, host, serviceName, allowInsecure := query.Get("type"), query.Get("security"), query.Get("alpn"), query.Get("sni"), query.Get("pbk"), query.Get("sid"), query.Get("fp"), query.Get("path"), query.Get("host"), query.Get("serviceName"), query.Get("allowInsecure")
 
+	// 注意：链接里的 type 是传输类型（tcp/ws/http/grpc/quic），不是 sing-box 出站的
+	// network 字段。之前直接把它写进 Network，导致 type=ws 这类常见链接生成的配置
+	// 被内核拒绝：outbounds[n].network: unknown network: ws。
+	// 传输类型在下面统一映射到 Transport。
+
 	var alpn []string
 	if strings.Contains(alpnStr, ",") {
 		alpn = strings.Split(alpnStr, ",")
@@ -77,7 +82,6 @@ func ParseTrojan(proxy string) (model.Outbound, error) {
 			ServerPort: port,
 		},
 		Password: password,
-		Network:  option.NetworkList(network),
 	}
 
 	if security == "xtls" || security == "tls" || sni != "" {

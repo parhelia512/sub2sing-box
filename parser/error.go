@@ -13,6 +13,7 @@ const (
 	ErrInvalidStruct             ParseErrorType = "invalid struct"
 	ErrInvalidPort               ParseErrorType = "invalid port number"
 	ErrInvalidNetworkBytesCompat ParseErrorType = "invalid network bytes compat"
+	ErrUnsupportedProxy          ParseErrorType = "unsupported proxy type"
 )
 
 func (e *ParseError) Error() string {

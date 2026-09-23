@@ -85,7 +85,7 @@ func ParseHysteria2(proxy string) (model.Outbound, error) {
 				ALPN:       alpn,
 			},
 		},
-		Network: option.NetworkList(network),
+		Network: ParseNetworkList(network),
 	}
 
 	if pinSHA256 != "" {

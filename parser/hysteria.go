@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 	"github.com/bestnite/sub2sing-box/constant"
 	"github.com/bestnite/sub2sing-box/model"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing/common/byteformats"
 )
 
 func ParseHysteria(proxy string) (model.Outbound, error) {
@@ -74,8 +72,7 @@ func ParseHysteria(proxy string) (model.Outbound, error) {
 	}
 	remarks = strings.TrimSpace(remarks)
 
-	up := &byteformats.NetworkBytesCompat{}
-	err = json.Unmarshal(fmt.Appendf(nil, `"%s"`, upmbps), up)
+	up, err := ParseBandwidth(upmbps)
 	if err != nil {
 		return model.Outbound{}, &ParseError{
 			Type:    ErrInvalidNetworkBytesCompat,
@@ -83,8 +80,7 @@ func ParseHysteria(proxy string) (model.Outbound, error) {
 			Raw:     proxy,
 		}
 	}
-	down := &byteformats.NetworkBytesCompat{}
-	err = json.Unmarshal(fmt.Appendf(nil, `"%s"`, downmbps), down)
+	down, err := ParseBandwidth(downmbps)
 	if err != nil {
 		return model.Outbound{}, &ParseError{
 			Type:    ErrInvalidNetworkBytesCompat,
