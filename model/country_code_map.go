@@ -1062,17 +1062,81 @@ func GetContryName(tag string) string {
 		CountryISO,
 		CountryEnglishName,
 	}
-	for _, countryMap := range countryMaps {
-		for k, v := range countryMap {
-			if slices.Contains(tagSlice, strings.ToLower(k)) {
-				return v
-			}
-			if strings.Contains(tag, strings.ToLower(k)) {
-				return v
+	// 第一轮：只认正则截出来的两字母国家码（带词边界，如 "US 洛杉矶 01" 里的 us）。
+	// 必须先于子串兜底，否则 "Socks" 里的 "ck" 也会命中 库克群岛(CK)。
+	for _, code := range tagSlice {
+		for _, countryMap := range countryMaps {
+			for k, v := range countryMap {
+				if strings.ToLower(k) == code {
+					return v
+				}
 			}
 		}
 	}
+	// 第二轮：子串兜底（中文名、英文全名、国旗 emoji）。
+	// 直接遍历 map 时命中顺序随机，同一个 tag 会在多个国家之间跳变（"US Socks 01" 一会是
+	// 美国(US)、一会是库克群岛(CK)），所以这里固定取「最长、其次最靠后、最后字典序最小」的键，
+	// 保证结果稳定；ASCII 键还要求命中处不是词内（前面不能是字母数字），避免再把
+	// "Socks 01" 判成 索马里(SO) 或 库克群岛(CK)。
+	lowerTag := strings.ToLower(tag)
+	bestKey, bestName, bestIndex := "", "", -1
+	for _, countryMap := range countryMaps {
+		for k, v := range countryMap {
+			key := strings.ToLower(k)
+			if key == "" {
+				continue
+			}
+			index := strings.Index(lowerTag, key)
+			if index < 0 || !matchedAsStandaloneToken(lowerTag, index, key) {
+				continue
+			}
+			better := bestIndex == -1
+			if !better {
+				switch {
+				case len(key) > len(bestKey):
+					better = true
+				case len(key) == len(bestKey) && index > bestIndex:
+					better = true
+				case len(key) == len(bestKey) && index == bestIndex && key < bestKey:
+					better = true
+				}
+			}
+			if better {
+				bestKey, bestName, bestIndex = key, v, index
+			}
+		}
+	}
+	if bestIndex >= 0 {
+		return bestName
+	}
 	return "其他地区"
+}
+
+// matchedAsStandaloneToken 判断 ASCII 键的命中是否像一个独立的词：
+// 命中前必须是边界（行首或非字母数字），命中后不能紧跟字母。
+// 中文名、国旗这类非 ASCII 键没有词边界，直接放行。
+// 不加这个约束，"Socks 01" 会命中 索马里(SO)（开头的 "so"）或
+// 库克群岛(CK)（"Socks" 里的 "ck"），"Russia" 会命中 美国(US)。
+func matchedAsStandaloneToken(tag string, index int, key string) bool {
+	for i := 0; i < len(key); i++ {
+		if key[i] >= 0x80 {
+			return true
+		}
+	}
+	if index > 0 && isASCIIAlnum(tag[index-1]) {
+		return false
+	}
+	if end := index + len(key); end < len(tag) {
+		next := tag[end]
+		if next >= 'a' && next <= 'z' || next >= 'A' && next <= 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIIAlnum(char byte) bool {
+	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9'
 }
 
 var values []string
