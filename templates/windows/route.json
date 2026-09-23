@@ -56,6 +56,9 @@
       }
     ],
     "final": "default",
-    "auto_detect_interface": true
+    "auto_detect_interface": true,
+    "default_domain_resolver": {
+      "server": "local"
+    }
   }
 }
